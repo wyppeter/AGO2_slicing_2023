@@ -296,7 +296,7 @@ genGuess = function(df.here, modelmode, ignoredGuesses){
     largestDelta = df.here %>%
       select(conc, time, fraccleaved) %>%  # simplify
       group_by(time) %>%
-      filter(conc %in% c(max(conc),min(conc))) %>%  # take only time points with more than one conc point
+      filter(conc %in% c(max(conc),min(conc))) %>%  # take only max and min concs
       group_by(time, conc) %>%
       summarize_at("fraccleaved", mean) %>%  # get mean for each time point, at each conc
       group_by(time) %>%
