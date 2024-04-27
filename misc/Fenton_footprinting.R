@@ -1,5 +1,4 @@
 # Processing and plotting data from Fenton probing
-
 library(tidyverse)
 
 # Defining lists and mappings ----
@@ -7,46 +6,69 @@ miRlvls = c(
   "miR-7",
   "let-7a",
   "miR-196a",
-  "miR-430a"
+  "miR-7.M4",
+  "miR-430a",
+  "miR-124",
+  "miR-124.M2"
 )
-miRcols = c(
-  "deeppink3",
-  "royalblue3",
-  "green4",
-  "purple4"
-)
-spacebuffer = "_______________"
-samplelanesList = c(
-  "N","A","B",
-  "E","C","D","C_k",
+spacebuffer = "___________________________"
+sampleTimeList = c(
+  "notarget_15",
+  "notarget_30",
+  "seed_30",
+  "seedsupp_30",
+  "tdmd_30",
+  "partial_4",
+  "partial_10",
+  "partial_30",
+  "slicing_1",
+  "slicing_4",
+  "slicing_10",
+  "slicing_15",
+  "slicing_30",
   spacebuffer
 )
-samplelanesList.names = c(
-  "No target", "Seed", "Seed+Suppl.",
-  "16-bp", "Perfect", "TDMD", "Perfect (1 min)",
+sampleTimeList.names = c(
+  "No target (15 min)",
+  "No target (30 min)",
+  "Seed (30 min)",
+  "Seed + suppl. (30 min)",
+  "Seed + ext. 3' (TDMD) (30 min)",
+  "16bp (4 min)",
+  "16bp (10 min)",
+  "16bp (30 min)",
+  "Perfect (1 min)",
+  "Perfect (4 min)",
+  "Perfect (10 min)",
+  "Perfect (15 min)",
+  "Perfect (30 min)",
   spacebuffer
 )
-samplelanesList.cols = c(
-  "gray50",
-  "dodgerblue2",
-  "royalblue4",
+sampleTimeList.colors = c(
+  "black",
+  "black",
+  "dodgerblue1",
+  "slateblue",
+  "springgreen3",
   "goldenrod1",
+  "darkgoldenrod3",
+  "darkgoldenrod4",
+  "lightsalmon1",
+  "indianred2",
+  "red",
+  "red3",
   "red4",
-  "springgreen4",
-  "tomato1",
   "white"
 )
-
-kineticexpes = c(8, 9)
-considered.range = c(4,20)
+considered.range = c(4, 20)
 
 # Set ggplot2 theme ----
 theme0 = theme(
   panel.grid.major = element_blank(),
   panel.grid.minor = element_blank(),
   panel.background = element_blank(),
-  axis.line = element_line(colour = "black"),
-  axis.ticks = element_line(colour = "black"),
+  axis.line = element_line(colour = "black", linewidth = 0.75),
+  axis.ticks = element_line(colour = "black", linewidth = 0.75),
   axis.text = element_text(color = "black", size = 12),
   axis.title = element_text(color = "black", size = 12),
   legend.background = element_blank(),
@@ -58,42 +80,42 @@ theme0 = theme(
 
 # Read and process data ----
 ## Raw input and initial processing
-df.raw = read.csv(paste0(
-    "./",
-    "fenton-data.csv"
-  )) %>%
+df.raw = read.csv("fenton_values_upto21.csv") %>%
+  ### Name conversion
   mutate(
     miR = if_else(miR == "miR-7-L22", "miR-7-L22_v2", miR),
-    rxnID = idLookUp(miR),
-    expetype = if_else(expe %in% kineticexpes, "ki", "eq")) %>%
-  filter(rxnID %in% miRlvls) %>%
-  select(-signalzeroed) %>%
+    rxnID = idLookUp(miR)) %>%
 
-  ### Data QC filters
-  # filter(!(miR == "miR-430a" & band >= 15)) %>%  # Interference from trimmed isoforms
-  filter(!(miR == "miR-430a" & expe == 2 & lane == "B")) %>%  # Outlier set; B sample had uniform & elevated signal, confirmed by code below. Toggle when checking outlier code.
+  filter(!(miR %in% c("miR-124", "miR-124-X2") & sample == "tdmd")) %>%
   
-  mutate()  # dummy
+  ### Data QC filters
+  filter(!(miR == "miR-430a" & expe == "2")) %>%  # Outlier set; uniform & elevated signal, confirmed by code below
+  filter(!(miR == "miR-430a"   & pos >= 15)) %>%  # Interference from trimmed isoforms
+  filter(!(miR == "miR-124"    & pos >= 15)) %>%  # Interference from trimmed isoforms
+  filter(!(miR == "miR-124-X2" & pos >= 15))      # Interference from trimmed isoforms
+  
 
-## Normalization to the range between Q (quenched) and G (naked guide) ----
+## Linear-rescaling normalization to the range between quenched and naked guide ----
 df = left_join(
     df.raw %>%
-      filter(!lane %in% c("G","Q")),
+      filter(!sample %in% c("naked","quenched")),
     df.raw %>%
-      filter(lane %in% c("G","Q")) %>%
-      select(-lane.expe) %>%
-      pivot_wider(names_from = "lane", values_from = "signalnorm"),
-    by = c("expe","expetype","band","miR","rxnID")  # by each miR, each experiment, and each nt size band
+      filter(sample %in% c("naked","quenched")) %>%
+      select(-time) %>%
+      pivot_wider(names_from = "sample", values_from = "fracfenton"),
+    by = c("expe","pos","miR","rxnID")  # by each miR, each experiment, and each nt size band
   ) %>%
-  rename(sample = lane, signal.raw = signalnorm) %>%
+  rename(signal.raw = fracfenton) %>%
   filter(!is.na(signal.raw)) %>%
   mutate(
-    max.inter = if_else(G > Q, G - Q, NA_real_),
-    signal.Qsub = signal.raw - Q,
-    signal = signal.Qsub / max.inter) %>%  # value is now in the relative range starting from Q to G
-  rename(pos = band) %>%
-  arrange(miR, expetype, sample, lane.expe, pos) %>%
-  filter(pos >= considered.range[1], pos <= considered.range[2])
+    signal.max = if_else(naked > quenched, naked - quenched, NA_real_),
+    signal.subtracted = signal.raw - quenched,
+    signal = signal.subtracted / signal.max) %>%  # value is now in the relative range
+  mutate(sample_time = paste(sample, time, sep = "_")) %>%
+  arrange(rxnID, time, sample, -pos) %>%
+  filter(pos >= considered.range[1], pos <= considered.range[2]) %>%
+  group_by(expe, miR, sample, time, sample_time, pos) %>%
+  mutate(sample.enum = row_number())
 
 ## Calculate mean and SEM ----
 sem.safe = function(x) {
@@ -101,13 +123,14 @@ sem.safe = function(x) {
           sqrt(var(x)/length(x)),
           0)
 }
+# Get mean and spread of values over replicates, calculated at a per-sample level
 df.summ = df %>%
-  group_by(miR, rxnID, expetype, sample, pos) %>%  # by miR, time point, treatment, nt size band
+  group_by(miR, rxnID, time, sample, sample_time, pos) %>%  # by miR, time point, treatment, nt size band
   filter(!is.na(signal)) %>%
   summarize(data.frame(
     signal.mean = mean(signal),
-    signal.sem = sem.safe(signal),
-    signal.sd = sd(signal) # !! for outlier detection
+    signal.sem  = sem.safe(signal),
+    signal.sd   = sd(signal) # !! for outlier detection
     ),
   .groups = "drop_last") %>%
   mutate(
@@ -115,244 +138,122 @@ df.summ = df %>%
     signal.min = signal.mean - signal.sem*1.96  # raw value distribution
   )
 
-## Calculate delta reactivity from no-target samples ----
-# i.e. increased reactivity upon binding to substrate
-df.delta = df %>%
-  left_join(df.summ %>%  # using mean values!
-              ungroup() %>%
-              filter(sample == "N", expetype == "eq") %>%
-              transmute(miR = miR, pos = pos, signal.N = signal.mean) %>%
-              distinct(),
-            by = c("miR","pos") # by miR, time point, nt size band; all treatments relative to the N treatment
-  ) %>%
-  mutate(
-    signal.d = signal - signal.N
-  )
-df.delta.summ = df.delta %>%
-  group_by(miR, rxnID, expetype, sample, pos) %>%  # by miR, time point, treatment, nt size band
-  filter(!is.na(signal.d)) %>%
-  summarize(data.frame(
-    signal.d.mean = mean(signal.d),
-    signal.d.sem  = sem.safe(signal.d)
-  ),
-  .groups = "drop_last") %>%
-  mutate(
-    signal.d.max = signal.d.mean + signal.d.sem*1.96,
-    signal.d.min = signal.d.mean - signal.d.sem*1.96  # delta value distribution
-  )
-
-## Incorporate kslice values for relationship, calc fraction occupancy of duplex (slicing) state ----
-df.k = read.csv(
-  "./slicing_ktable.csv"
-)
-
-# Quantify the bridge reactivity of the C state as a proxy of proportion in duplex
-duplex.peak.range = c(9, 11)  # region used as proxy for occupancy
-df.fracduplex.raw = df.delta %>%
-  # Bind in kslices
-  left_join(df.k %>%
-              select(rxnID, kcat, kcat.lo, kcat.hi),
-            by = c("rxnID")) %>%
-  filter(pos %in% seq(
-    duplex.peak.range[1],
-    duplex.peak.range[2]
-    ),  # focus on the bridge region that gets exposed upon duplexing
-         sample == "C") %>% 
-  ungroup() %>%
-  arrange(
-    miR, rxnID,  # these separate different guides
-    pos,  # nt position
-    expetype,  # this separates 1 min and 30 min time points
-    expe, lane.expe  # these separate by lane (samples)
-    )
-df.fracduplex = df.fracduplex.raw %>%
-  left_join(
-    # Get the ceiling of steady state, per guide, per pos
-    df.fracduplex.raw %>%
-      filter(expetype == "eq") %>%
-      group_by(miR, pos) %>%
-      transmute(
-        miR = miR,
-        bridge.ss = mean(signal.d)/(1 - exp(- kcat * 30))  # math approx of where the max really is based on 30 min time point
-      ) %>%
-      distinct(),
-    by = c("miR", "pos")
-  ) %>%
-  # Calculate fraction occupancy
-  mutate(time = if_else(expetype == "ki", 1, 30),
-         bridge.norm = signal.d / bridge.ss) %>%  # relative proportion of duplex state
-  select(miR, rxnID, expetype, time, pos,
-         expe, lane.expe,
-         kcat, kcat.lo, kcat.hi,
-         bridge.ss, bridge.norm) %>%
-  # Now we average out the positions per rep. Diff positions are not reps!
-  group_by(miR, rxnID, expetype, time,
-           expe, lane.expe) %>%
-  select(-pos) %>%
-  summarize_all(mean) %>%
-  group_by(miR, rxnID, expetype)
-
-df.fracduplex.summ = df.fracduplex %>%
-  # Make summarizing stats averaging across reps
-  group_by(miR, rxnID, kcat, kcat.lo, kcat.hi, expetype, time) %>%
-  summarize(data.frame(
-    bridge.norm.mean = mean(bridge.norm),
-    bridge.norm.sem  = sem.safe(bridge.norm)
-  ),
-  .groups = "drop_last") %>%
-  mutate(
-    bridge.norm.max = bridge.norm.mean + bridge.norm.sem*1.96,
-    bridge.norm.min = bridge.norm.mean - bridge.norm.sem*1.96,  # duplex state distribution
-    fraccleaved     = 1 - exp(- kcat * 1),
-    fraccleaved.max = 1 - exp(- kcat.hi * 1),
-    fraccleaved.min = 1 - exp(- kcat.lo * 1)  # fraction sliced calculation
-  )
-
-# #@#@#@#@#@#@#@#@
-# ## Special section: checking that miR-430a, seed+supp, exp 2 is an outlier: ----
-# # Calculate how many avg SDs are the values away from the mean, per pos
+#@#@#@#@#@#@#@#@
+# # Special section: checking that miR-430a, seed+supp, exp 2 is an outlier: ----
+# # Calculate how many SDs are the values away from the mean, per pos
 # avg.sd = sqrt(mean((ungroup(df.summ)$signal.sd)**2))
 # 
 # df.dev = df %>%
 #   left_join(df.summ %>%
 #               ungroup() %>%
-#               select(miR, expetype, pos, sample,
+#               select(miR, time, pos, sample,
 #                      signal.mean),
-#             by = c("miR", "expetype", "pos", "sample")) %>%
+#             by = c("miR", "time", "pos", "sample")) %>%
 #   ungroup() %>%
-#   filter(sample != "Co") %>%
-#   mutate(devia = (signal - signal.mean)/avg.sd) %>%
-#   mutate(sample.wtype = if_else(expetype == "ki", paste(sample, "k", sep = "_"), sample))
+#   mutate(devia = (signal - signal.mean)/avg.sd)
 # df.dev.summ = df.dev %>%
-#   group_by(expe, lane.expe, expetype, rxnID, sample) %>%
+#   group_by(expe, sample.enum, time, rxnID, sample) %>%
 #   mutate(Q.lo = quantile(devia, probs = c(0.25), na.rm = T),
 #          Q.me = quantile(devia, probs = c(0.50), na.rm = T),
 #          Q.hi = quantile(devia, probs = c(0.75), na.rm = T)
 #          ) %>%
 #   ungroup() %>%
-#   select(expe, lane.expe, rxnID, sample, expetype,
+#   select(expe, sample.enum, rxnID, sample, time,
 #          Q.lo, Q.me, Q.hi) %>%
 #   distinct() %>%
-#   arrange(-abs(Q.me)) %>%
-#   mutate(sample.wtype = if_else(expetype == "ki", paste(sample, "k", sep = "_"), sample))
+#   arrange(-abs(Q.me))
 # df.dev %>%
-#   ggplot(aes(y = factor(interaction(expe, lane.expe)),
+#   ggplot(aes(y = factor(paste(expe, sample, sample.enum)),
 #              x = devia,
-#              group = factor(interaction(expe, lane.expe)),
-#              color = sample.wtype)) +
+#              group = factor(paste(expe, sample, sample.enum)),
+#              color = sample)) +
 #   facet_wrap("rxnID", scales = "free_y") +
 #   geom_vline(xintercept = 0, linetype = "dashed") +
 #   geom_vline(xintercept = c(-2, 2), color = "salmon1", linetype = "dashed") +
 #   geom_vline(xintercept = c(-2.5, 2.5), color = "salmon3", linetype = "dashed") +
 #   geom_boxplot() +
 #   geom_point(shape = 1, size = 1) +
-#   labs(y = "Experiment", x = "Avg SDs away from mean") +
+#   labs(y = "Experiment", x = "SEMs away from mean") +
 #   theme0
-# #### >>>> dre-miR-430a, B, expe 2 is an outlier set. Median > 2 SDs out.
-# #@#@#@#@#@#@#@#@
+# #### >>>> dre-miR-430a, B, expe 2 is an outlier set. Median > 2 SDs out!
+#@#@#@#@#@#@#@#@
 
-# All plots ----
+# Plots ----
 # Reactivity for each target type overlaid
-df.reactivity = df.summ %>%
-  mutate(sample.wtype = if_else(expetype == "ki", paste(sample, "k", sep = "_"), sample)) %>%
-  bind_rows(data.frame(
-    sample.wtype = spacebuffer,
-    rxnID = "miR-7")) %>%
+
+df.ND = data.frame(rxnID = c(
+  "miR-430a",
+  "miR-124",
+  "miR-124.M2"
+  )) %>%
   mutate(rxnID = factor(rxnID, levels = miRlvls))
-df.430atrim = data.frame(
-  rxnID = "miR-430a"
-) %>%
-  mutate(rxnID = factor(rxnID, levels = miRlvls))
-f1 = df.reactivity %>%
-  # Filter which target results to show
-  filter(sample.wtype %in% c(
-    "N",
-    # "A","B",
-    # "E",
-    "C",
-    # "D",
-    "C_k",
+
+df.summ %>%
+  
+  ### ***Filter which results to show
+  # filter(time == 30) %>%
+  # filter(time != 30) %>%
+  filter(!(time == 15 & sample == "notarget" & miR == "miR-196a")) %>%
+  filter(rxnID %in% c(
+    "miR-7",
+    # "let-7a",
+    "miR-196a",
+    "miR-7.M4",
+    "miR-430a",
+    "miR-124",
+    "miR-124.M2"
+  )) %>%
+  filter(sample %in% c(
+    "notarget",
+    # "seed","seedsupp",
+    # "partial",
+    "slicing",
+    # "tdmd",
     spacebuffer
   )) %>%
-  # Plot
-  ggplot(aes(x = pos, y = signal.mean, color = sample.wtype)) +
-  facet_wrap("rxnID", ncol = 4, scales = "free_x") +
-
-  # Highlight pos 9 to 11 for slicing ones
+  
+  bind_rows(data.frame(
+    sample_time = spacebuffer,
+    sample = spacebuffer,
+    # miR = "miR-124", rxnID = "miR-124"
+    miR = "miR-7-L22_v2", rxnID = "miR-7"
+    )) %>%  # makes display more consistent between plots
+  mutate(rxnID = factor(rxnID, levels = miRlvls)) %>%
+  
+  ### Plot
+  ggplot(aes(x = pos, y = signal.mean, color = sample_time)) +
+  facet_wrap("rxnID", ncol = 6, scales = "free_x") +
+  
+  # ***Highlight pos 9 to 11 for slicing data plots
   annotate("rect", fill = "lightcoral", alpha = 0.15,
            xmin = 8.5, xmax = 11.5, ymin = -Inf, ymax = Inf) +
-
+  
+  geom_hline(yintercept = c(0, 1), color = "black",
+             linewidth = 0.75, linetype = "dashed") +
+  
   geom_errorbar(aes(ymax = signal.max, ymin = signal.min),
-                width = 0.25, linewidth = 0.5, alpha = 0.33) +
+                width = 0.4, linewidth = 0.5, alpha = 0.3) +
   geom_line(linewidth = 0.75, alpha = 0.75) +
-
-  # Block out interference from trimmed isoforms of miR-430a
-  geom_rect(data = df.430atrim,
-            inherit.aes = FALSE,
-            fill = "white", alpha = 1,
-            xmin = 14.5, xmax = 22.5,
-            ymin = -Inf, ymax = Inf) +
-
-  geom_hline(yintercept = c(0,1), color = "black",
-             linewidth = 0.5, linetype = "dashed") +
+  
+  # ***Indicate indeterminable data range
+  geom_text(data = df.ND, inherit.aes = F,
+            aes(x = 18, y = 0.5, label = "N.D."),
+            size = 4, color = "gray50",
+            hjust = 0.5, vjust = 0.5) +
   
   scale_color_manual(
-    breaks = samplelanesList,
-    labels = samplelanesList.names,
-    values = samplelanesList.cols) +
+    breaks = sampleTimeList,
+    labels = sampleTimeList.names,
+    values = sampleTimeList.colors) +
+  
   coord_cartesian(ylim = c(-0.05,1.05), xlim = considered.range) +
   scale_x_continuous(breaks = seq(0,25,2)) +
-  labs(x = "Guide nucleotide position", y = "OH reactivity") +
+  labs(x = "Guide nucleotide position", y = "*OH reactivity",
+       color = "Target bound") +
   theme0
-f1
 
-# Mech graph ----
-f2 = df.fracduplex.summ %>%
-  filter(expetype == "ki") %>%
-  ggplot(aes(y = bridge.norm.mean,
-             x = fraccleaved,
-             color = rxnID)) +
-
-  geom_hline(yintercept = c(0,1),
-             color = "gray70", linewidth = 0.5, linetype = "dashed") +
-  geom_vline(xintercept = c(0,1),
-             color = "gray70", linewidth = 0.5, linetype = "dashed") +
-  geom_abline(
-    slope = 1,
-    intercept = 0,
-    linewidth = 0.5,
-    color = "gray70"
-  ) +
-
-  geom_point(data = df.fracduplex %>%
-               filter(expetype == "ki"),
-             aes(y = bridge.norm,
-                 x = 1 - exp(- kcat * 1)),
-             shape = 16, alpha = 0.6, size = 3) +
-
-  geom_point(shape = 16, alpha = 1, size = 1.5) +
-
-  geom_errorbar(aes(ymin = bridge.norm.min, ymax = bridge.norm.max),
-                width = 0.05,
-                linewidth = 0.5,
-                alpha = 0.8,
-                # color = "black"
-                ) +
-  geom_errorbarh(aes(xmin = fraccleaved.min, xmax = fraccleaved.max),
-                 height = 0.05,
-                 linewidth = 0.5,
-                 alpha = 0.8,
-                 # color = "black"
-                 ) +
-
-  scale_color_manual(
-    breaks = miRlvls,
-    values = miRcols) +
-  scale_y_continuous(breaks = seq(-10,10,0.5)) +
-
-  coord_fixed(ylim = c(-0.25, 1.25), xlim = c(-0.25, 1.25)) +
-  labs(x = "Expected fraction sliced based on kslice, at 1 min",
-       y = "Fraction Fenton reactivity at g9-11, at 1 min") +
-  theme0
-f2
-
+#===================
+df.countN = df %>% 
+  filter(pos == 10) %>% 
+  group_by(rxnID, sample, time) %>%
+  count()

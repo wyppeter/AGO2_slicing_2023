@@ -56,7 +56,8 @@ theme0.megaplot = theme(
   strip.text.x = element_text(size = 12, colour = "black", 
                               family = "sans", hjust = 0.5),
   strip.text.y = element_text(size = 12, colour = "black", 
-                              family = "sans", hjust = 0.5, angle = 0)
+                              family = "sans", hjust = 0.5, angle = 0),
+  legend.position = "bottom"
 )
 
 # READ DATA ----
@@ -292,8 +293,10 @@ plt = df.dt %>%
               left_join(namedict.print.pub, by = "miR") %>%
               left_join(df.q.note, by = "miR"),
             inherit.aes = FALSE, size = 4.25, color = "black",
-            y = 0.95, vjust = 1,
-            x = -Inf, hjust = -0.15,
+            # y = 0.95, vjust = 1,
+            # x = -Inf, hjust = -0.15,
+            y = 0.05, vjust = 0,
+            x = Inf, hjust = 1,
 
             parse = TRUE,
             aes(
@@ -309,10 +312,13 @@ plt = df.dt %>%
 
   coord_capped_cart(
     ylim = c(0, 1.2),
+    xlim = c(10^-1.3, 10^3.0),
     left = "top", bottom = "none") +
 
-  scale_x_continuous(expand = expansion(mult = c(0, expandTime), add = 0),
-                     trans = "log10", labels = sci10) +
+  scale_x_continuous(
+    # expand = expansion(mult = c(0, expandTime), add = 0),
+    expand = c(0, 0),
+    trans = "log10", labels = sci10) +
   scale_y_continuous(limits = c(0, 1), expand = c(0, 0),
                      breaks = seq(0, 1, 0.2)) +
 
@@ -335,10 +341,10 @@ if(SAVE_PLOT){
       suff,
       "_DRAW",
 
-      ".pdf"),
+      "_new.pdf"),
     plot = plt,
 
-    width = 14, height = 19,
+    width = 13, height = 19,
 
     units = "in"
   )

@@ -52,8 +52,10 @@ namedict.print = namedict %>%
                        sub("\\(",  " (",
                        sub("#",    ", ",
                        sub("_",    ", ",
+                       sub("mer",  "-mer",
+                       sub("16bp",  "16-bp",
                       gsub("\\|",  ", ",
-                           rxnID.explicit))))))
+                           rxnID.explicit))))))))
 namedict.print.pub = namedict.print %>%
   mutate(rxnID.print = gsub("flank", " flanking", gsub("prep", " prep.",
                             gsub("-", "\uad",

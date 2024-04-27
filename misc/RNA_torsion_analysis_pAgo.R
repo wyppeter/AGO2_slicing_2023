@@ -17,10 +17,10 @@ theme0 = theme(
 )
 
 # Read data ----
-PDBcodes = c("4w5n", "4w5r", "6n4o", "6mdz", "7swf")
+PDBcodes = c("7SWF", "4NCB")
 PDBdict = data.frame(
   PDB = PDBcodes,
-  ago.state = c("No target", "Seed", "Seed+Supp", "TDMD", "Slicing")
+  ago.state = c("athAGO10", "TtAgo")
 )
 blank = PDBdict %>%
   mutate(filler = 1) %>%
@@ -29,19 +29,20 @@ blank = PDBdict %>%
   ))
 
 df = read.csv(
-  "torsion_values_compiled.csv",
+  "pAgo_torsion_values+7swf.csv",
   stringsAsFactors = T
 ) %>%
+  filter(PDB %in% c("4NCB", "7SWF")) %>%
   left_join(PDBdict, by = "PDB") %>%
-  filter(PDB == "4w5n" & nt %in% seq(2, 7, 1) |
-           bp.state) %>%
+  filter(bp.state) %>%
+  # rename(nt = pos) %>%
   mutate(PDB = factor(PDB, levels = PDBcodes)) %>%
   full_join(blank, by = c("PDB", "ago.state", "nt")) %>%
   arrange(PDB, nt)
 
 # All-angle analysis ----
 anglesOI = c(
-  "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "v2"
+  "delta", "epsilon", "v2", "zeta", "alpha", "beta", "gamma"
 )
 
 df.angles = df %>%
@@ -74,7 +75,7 @@ df.angles.l %>%
   theme0 +
   theme(strip.placement = "outside")
 
-# Key angles analysis ----
+# Conformer analysis ----
 df.conf = df %>%
   select(PDB, ago.state, nt, gamma, delta) %>%
   pivot_longer(cols = -c("PDB", "ago.state", "nt"),
@@ -82,14 +83,10 @@ df.conf = df %>%
   mutate(PDB = factor(PDB, levels = PDBdict$PDB),
          ago.state = factor(ago.state, levels = PDBdict$ago.state)) %>%
 
-  mutate(value = if_else(((PDB == "6mdz" & nt %in% c(11,14,15,17,18,19)) |
-           (PDB == "6n4o" & nt == 16)), NA_real_, value
-           )) %>%  # outliers by molprobity
-
-  mutate(nt = if_else(angle == "delta", nt, nt - 0.5)) %>%  # gamma is a suite angle, better represented as linkages
+  mutate(nt = if_else(angle == "delta", nt, nt - 0.5)) %>%  # gamma is a suite angle
   mutate(value = if_else(nt < 2, NA_real_, value)) %>%
 
-  mutate(value = if_else(value < 0, value + 360, value)) %>%  # help the cyclic y-axis to be plotted better
+  mutate(value = if_else(value < 0, value + 360, value)) %>%  # formatting
   arrange(angle, rev(PDB), nt)
 
 df.refs = read.csv(
@@ -101,6 +98,7 @@ df.refs = read.csv(
          upper = if_else(upper < 0, upper + 360, upper))
 
 df.conf %>%
+  arrange(PDB) %>%
   ggplot(aes(x = nt, y = value,
              color = ago.state)) +
   facet_wrap("angle",
@@ -135,14 +133,9 @@ df.conf %>%
   geom_point(aes(shape = ago.state), stroke = 1.2, size = 1.2, alpha = 0.8) +
 
   scale_color_manual(breaks = PDBdict$ago.state,
-                     values = c("goldenrod1",
-                                "goldenrod4",
-                                "#FFAACC",
-                                "#FF55DD",
-                                "#BB0022"
-                                )) +
+                     values = c("#BB0022", "#4411FF")) +
   scale_shape_manual(breaks = PDBdict$ago.state,
-                     values = c(1,2,0,6,5)) +
+                     values = c(5,4)) +
 
   scale_x_continuous(limits = c(1,23),
                      breaks = c(2,6,7,10,13,16,21)) +

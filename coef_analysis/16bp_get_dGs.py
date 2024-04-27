@@ -35,16 +35,16 @@ def miRDiv(seq):
         divNames[3]:seq[12:16], #13 - 16
         divNames[4]:seq[16:]    #17 - end
         }
-def cofoldInput(seq):
-    """ Get params for RNAcofold """
+def evalInput(seq):
+    """ Get params for RNAeval """
     constr  = "("*len(seq) + "&" + ")"*len(seq)
     combSeq =         seq  + "&" + revcomp(seq)
     return combSeq + "\n" + constr
-def cofoldCall(callInput, tempParam = []):
-    """ Wrapper to call RNAcofold with constrained pairing """
+def evalCall(callInput, tempParam = []):
+    """ Wrapper to call RNAeval """
     # Outputs the dG energy value
     foldOutput = subprocess.run(
-            ["RNAcofold", "--noPS", "-C", "--enforceConstraint"] + tempParam,
+            "RNAeval",
             input = callInput,
             capture_output = True, text = True
             ).stdout
@@ -56,7 +56,7 @@ def DomParse(seq):
     div = miRDiv(seq)
     for dom in divNames:
         regseq = div[dom]
-        dG = cofoldCall(cofoldInput(regseq)) - 4.09  # correct for initiation penalty
+        dG = evalCall(evalInput(regseq)) - 4.09  # correct for initiation penalty
         if regseq == revcomp(regseq):
             # Need to correct for symm penalty given
             dG = dG - 0.43
