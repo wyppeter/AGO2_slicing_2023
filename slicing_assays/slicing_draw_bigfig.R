@@ -62,16 +62,12 @@ theme0.megaplot = theme(
 
 # READ DATA ----
 # [A] >= [R]*4
-df.raw = read.csv(paste0(
-  "./",
-  "slicing_data_STO.csv"),
-  stringsAsFactors = T
-)
+df.raw = read.csv("./slicing-assay-data_collated-STO.csv", stringsAsFactors = T)
 
 # READ COEFS ----
 ODEfit = read.csv(paste(
     "./",
-    "slicing_ktable.csv",
+    "slicing_ktable.csv",  # CTS (ODE) and EXP combined
     sep = "")) %>%
   select(miR, 
          kon, kon.lo, kon.hi,
@@ -85,51 +81,42 @@ ODEfit = read.csv(paste(
     kph2 = kph2/60
   )
 
+# PREPARE DETAILED PRINT NAMES ----
+namedict = read.csv("./rxnID_details.csv", stringsAsFactors = F) %>%
+  mutate(miR = rxnID) %>%
+  mutate(rxnID.print = sub("\\.2", ", 2",
+                           sub("\\(",  " (",
+                               sub("#",    ", ",
+                                   sub("_",    ", ",
+                                       sub("mer",  "-mer",
+                                           sub("16bp",  "16-bp",
+                                               gsub("\\|",  ", ",
+                                                    rxnID.detailed)))))))) %>%
+  mutate(rxnID.print.formatted = gsub("flank", " flanking", 
+                                      gsub("prep", " prep.",
+                                           gsub("-", "\uad",
+                                                gsub("altTarg", "alt. target",
+                                                     gsub("altLabel", "alt. label",
+                                                          rxnID.print))))))
+
 # PROCESS AND COMBINE DATA ----
+# Note suffixes: miR-000a#XXX_XXX --> #XXX = RISC notes, _XXX = targ notes
 df = df.raw %>%
-  
-  ### Note suffixes:
-  ###
-  ### miR-000a#XXX_XXX --> #XXX = RISC notes, _XXX = targ notes
-  ###
-  
-  # Add note to non-PW prep AGO rxns
-  mutate(
-    miR = as.character(miR) %>%
-      if_else(prep == "PW", ., paste0(., "#", prep)) %>%
-      factor()
+  # Map back to legacy headings
+  transmute(miR = reaction.symbol,
+            assay = assayID,
+            conc = RISC.conc,
+            Rconc = RNA.conc,
+            time = time..s.,
+            fraccleaved = fracsliced
   ) %>%
 
-  ## Remove special data points
-  filter(!miR %in% c(
-    # Single-conc rxns that cannot be used
-    "miR-122#TP",
-    "miR-124#TP",
-    "miR-7#TP"
-  )) %>%
-
-  ## Concentration correction (guide* quant)
-  mutate(miR_c = sub("_.+", "", as.character(miR)),  # get AGO prep name for quant lookup
-         conc_raw = conc,
-         conc = if_else(
-           qtype == "guide",
-           conc * qLookUp(miR_c),
-           conc),  # correct for quant ratio
-         approx.quant = (qtype == "guide" & qLookUp.bool(miR_c)), 
-         
-         ## MISC CLEANUP
-         time = as.integer(round(time*60))) %>%  # rounding to the time resolution of ODE, and convert to seconds
-  filter(conc != 0, time != 0) %>%  # discard control points
+  ## MISC CLEANUP
   mutate(assay = factor(as.character(assay)), conc_d = factor(conc)) %>%  # factor-ize some variables
   arrange(miR, conc, assay)
 
 # Note down the guide names used here
 guides = as.character(unname(levels(df$miR)))
-
-# Note down quant approximations from guide*
-df.q.note = df %>%
-  select(miR, approx.quant) %>%
-  distinct()
 
 # Simplify df
 df.dt = df %>%
@@ -277,21 +264,20 @@ df.graph.inf = df.graph.setup.inf %>%
 # PLOT ----
 FACETS = 7
 plt = df.dt %>%
-  left_join(namedict.print.pub, by = "miR") %>%
+  left_join(namedict, by = "miR") %>%
   ggplot(aes(x = time/60, y = fraccleaved,
              color = conc, group = conc)) +
 
   geom_line(data = df.graph %>%
-              left_join(namedict.print.pub, by = "miR"),
+              left_join(namedict, by = "miR"),
             aes(y = fraccleaved.ode), linewidth = 0.5, alpha = 0.75) +
   geom_line(data = df.graph.inf %>%
-              left_join(namedict.print.pub, by = "miR"),
+              left_join(namedict, by = "miR"),
             aes(y = fraccleaved.ode), linewidth = 0.5, alpha = 0.75, color = "black") +
   geom_point(size = 0.85, stroke = 1, shape = 1, alpha = 0.75) +
 
   geom_text(data = ODEfit.plot %>%
-              left_join(namedict.print.pub, by = "miR") %>%
-              left_join(df.q.note, by = "miR"),
+              left_join(namedict, by = "miR"),
             inherit.aes = FALSE, size = 4.25, color = "black",
             # y = 0.95, vjust = 1,
             # x = -Inf, hjust = -0.15,
@@ -304,7 +290,7 @@ plt = df.dt %>%
                              sampleN
               ))) +
 
-  facet_wrap("rxnID.print", ncol = FACETS, scales = "free") +
+  facet_wrap("rxnID.print.formatted", ncol = FACETS, scales = "free") +
   scale_color_viridis(direction = -1, option= "D", discrete = F, na.value = "gray80",
                       end = 0.97, limits = c(0.05, 50),
                       trans = "log10",

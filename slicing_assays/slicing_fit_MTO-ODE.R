@@ -23,7 +23,6 @@ library(FME)
 
 # SELECT MODEL MODE ----
 modelmode = "CTS"
-
 # modelmode = "MAX"
 # modelmode = "CTR"
 # modelmode = "UNL"
@@ -63,36 +62,31 @@ fit.Fmax.and.QQ = c(
   "lsy-6#S387A",
   "lsy-6#S387D",
 
-  # "miR-7-X3",
-  # "miR-7-X3#S387A",
-  # "miR-7-X3#S387D"
+  # "miR-7.M1",
+  # "miR-7.M1#S387A",
+  # "miR-7.M1#S387D"
 
-  "miR-196a-X3"
-  # "miR-7-X5",
-  # "miR-M7"
+  "miR-196a.M3"
+  # "miR-7.M5",
+  # "miR-7.M3"
 )
 # All fit for QQ
 
-df.raw = read.csv(paste0(
-  "./",
-  "slicing_data_MTO.csv"
-  ),
-  stringsAsFactors = T
-)
+df.raw = read.csv("./slicing-assay-data_collated-MTO.csv", stringsAsFactors = T)
 
 # PROCESS AND COMBINE DATA ----
 df.mto = df.raw %>%
-  mutate(expe_set = paste0("expe",str_extract(as.character(expe), "^[0-9]+"))) %>%  # experiment set
-
-  ## Concentration correction (guide* quant)
-  mutate(miR_c = sub("_.+", "", as.character(miR)),  # get AGO prep name for quant lookup
-         conc_raw = conc,
-         conc = if_else(
-           qtype == "guide",
-           conc * qLookUp(miR_c),
-           conc),  # correct for quant ratio
-         approx.quant = (qtype == "guide" & qLookUp.bool(miR_c))
+  # Map back to legacy headings
+  transmute(miR = reaction.symbol,
+            assay = assayID,
+            conc = RISC.conc,
+            Rconc = RNA.conc,
+            time = time..min.,
+            fraccleaved = fracsliced
   ) %>%
+  mutate(
+    expe = assay,
+    expe_set = paste0("expe", str_extract(as.character(expe), "^[0-9]+"))) %>%  # experiment set
 
   ## MISC CLEANUP
   mutate(conc.c = formatCoefs(conc))
@@ -459,8 +453,7 @@ df.coefs = df.result %>% select(-time, -fraccleaved) %>% distinct()
 
 # PLOT ----
 MTOgraph = df.result %>%
-  left_join(namedict.print, by = "miR") %>%
-  mutate(plot.group = paste(expe_set, rxnID.print, sep = ": ")) %>%
+  mutate(plot.group = paste(expe_set, miR, sep = ": ")) %>%
   ggplot(aes(x = time,
              group = expe)) +
 
@@ -469,8 +462,7 @@ MTOgraph = df.result %>%
 
   geom_hline(
     data = df.coefs %>%
-      left_join(namedict.print, by = "miR") %>%
-      mutate(plot.group = paste(expe_set, rxnID.print, sep = ": ")),
+      mutate(plot.group = paste(expe_set, miR, sep = ": ")),
     aes(
       yintercept = burst.lvl * Fa
     ),
@@ -478,8 +470,7 @@ MTOgraph = df.result %>%
     alpha = 0.3, color = "dodgerblue") +
 
   geom_line(data = df.graph %>%
-              left_join(namedict.print, by = "miR") %>%
-              mutate(plot.group = paste(expe_set, rxnID.print, sep = ": ")),
+              mutate(plot.group = paste(expe_set, miR, sep = ": ")),
             linewidth = 0.5, alpha = 0.75, color = "gray25",
             aes(y = fraccleaved.ode)) +
 
@@ -490,8 +481,7 @@ MTOgraph = df.result %>%
   # Fitted parameters print
   # print in min-1
   geom_text(data = df.coefs %>%
-              left_join(namedict.print, by = "miR") %>%
-              mutate(plot.group = paste(expe_set, rxnID.print, sep = ": ")),
+              mutate(plot.group = paste(expe_set, miR, sep = ": ")),
             x = Inf, y = 0,
             vjust = 0, hjust = 1,
             size = 3,
@@ -539,11 +529,10 @@ MTOgraph
 if(SAVE_TABLE){
   MTOfit.write = MTOfit %>%
     ungroup() %>%
-    left_join(namedict.print, by = "miR") %>%
     transmute(
       expe_set  = expe_set,
       miR       = miR,
-      rxnID     = rxnID,
+      rxnID     = miR,
 
       koffP       = koffP,
       koffP.lo    = koffP.lo,

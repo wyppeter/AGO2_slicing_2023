@@ -21,11 +21,8 @@ theme0 = theme(
 difflim = 60
 
 # Initial data wrangling
-df.k = read.csv(paste0(
-  "./",
-  "slicing_ktable",
-  ".csv")) %>%
-  left_join(namedict, by = c("miR", "rxnID"))
+df.k = read.csv("./slicing_ktable.csv") %>%
+  mutate(rxnID = miR)
 
 df.dG = read.csv(paste(
   "./",

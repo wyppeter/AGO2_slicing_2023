@@ -22,8 +22,7 @@ theme0 = theme(
 df.kcat = read.csv(paste0(
   "./",
   "slicing_ktable.csv")) %>%
-  select(miR, kcat, kcat.lo, kcat.hi) %>%
-  left_join(namedict, by = "miR")
+  select(miR, rxnID, kcat, kcat.lo, kcat.hi)
 
 # List of miRs
 IDs_measured = c(
@@ -66,7 +65,7 @@ df.dG = read.delim(paste0(
   stringsAsFactors = T
 ) %>%
   arrange(miR) %>%
-  mutate(rxnID = base.name(idLookUp(miR))) %>%
+  mutate(rxnID = gsub("#.+|_.+", "", miR)) %>%
   filter(rxnID %in% IDs_measured)
 
 df = df.kcat.16bp %>%

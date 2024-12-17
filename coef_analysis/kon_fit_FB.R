@@ -35,7 +35,6 @@ df.raw = read.csv(paste0(
 guides = unique(df.raw$miR)
 df.dt = df.raw %>%
   mutate(time = time/60) %>%
-  left_join(namedict, by = "miR") %>%
   arrange(miR, time) %>%
   group_by(miR)
 
@@ -70,8 +69,7 @@ nlsFit = df.dt %>%
             kon.lo = CI.lo_kon) %>%
   left_join(df.dt %>% filter(!is.na(conc)) %>%
               select(miR, conc) %>% distinct(),
-            by = "miR") %>%
-  left_join(namedict, by = "miR")
+            by = "miR")
 
 # Make graph
 t.plot = seq(0,4,0.01)
@@ -112,6 +110,6 @@ df.dt %>%
             )
   ) +
   scale_y_continuous(limits = c(0, 1), expand = c(0, 0)) +
-  facet_wrap("rxnID", scales = "free") +
+  facet_wrap("miR", scales = "free") +
   labs(x = "Time (min)", y = "Fraction bound") +
   theme0

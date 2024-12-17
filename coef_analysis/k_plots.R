@@ -22,6 +22,7 @@ library(ggnewscale)
 
 ## Setup and data input ----
 workDir = "./"
+difflim = 60
 
 # Set ggplot2 theme
 theme0 = theme(
@@ -51,9 +52,7 @@ df.offP = read.csv(paste0(
 df.k = read.csv(paste0(
   workDir,
   "slicing_ktable.csv")) %>%
-  select(-rxnID) %>%
-  left_join(namedict, by = "miR") %>%
-  mutate(mainrxn = rxnID == guidename)
+  mutate(mainrxn = rxnID == gsub("#.+|_.+", "", rxnID))
 
 k_TO_PLOT = "kcat"
 df.k.l = df.k %>%
@@ -71,15 +70,14 @@ df.k.l = df.k %>%
 df.k.this = df.k.l %>%
   filter(coeff == k_TO_PLOT) %>%
   arrange(val) %>%
-  mutate(rxnID = fct_inorder(rxnID),
-         rxnID.explicit = fct_inorder(rxnID.explicit))
+  mutate(rxnID = fct_inorder(rxnID))
 
 ############### K PLOTS ########################################################
 
 # k + seq dets plot ----
 otherkcat = data.frame(
   rxnID = c("hsa-let-7a.21mer", "hsa-miR-21.21mer"),
-  rxnID.explicit = c("hsa-let-7a.21mer", "hsa-miR-21.21mer"),
+  rxnID = c("hsa-let-7a.21mer", "hsa-miR-21.21mer"),
   val   = c(3.30, 5.22),
   mainrxn = c(NA, NA),
   W7 = c(T,T),
@@ -87,9 +85,33 @@ otherkcat = data.frame(
   W17 = c(T,T),
   short = c(T,T)
 )
+df.dG = read.delim(paste0(
+  "./",
+  "16bp_analysis-dGvals.tsv"),
+  stringsAsFactors = F
+)
+detLookUp = function(seqs, det = c("W7", "R10", "W17", "len")){
+  # Returns boolean for W7, R10, W17, or integer len
+  dets = case_when(
+    det == "W7"  ~ as.integer(substr(seqs, 7,  7)  %in% c("A","U")),
+    det == "R10" ~ as.integer(substr(seqs, 10, 10) %in% c("A","G")),
+    det == "W17" ~ as.integer(substr(seqs, 17, 17) %in% c("A","U")),
+    det == "len" ~ nchar(seqs),
+    TRUE ~ NA_integer_
+  )
+  return(dets)
+}
+formatexplicitID = function(idname){
+  # Specifically spells out the explicit (exact substitutions) part of the names
+  gsub("\\|", ", ",
+       gsub("\\(", " (",
+            idname
+       )
+  )
+}
 df.k.this.dets = df.k.l %>%
   filter(coeff == "kcat", mainrxn) %>%
-  mutate(seq = seqLookUp(miR.base)) %>%
+  left_join(df.dG %>% select(miR, seq), by = "miR") %>%
   mutate(
     W7 = detLookUp(seq, "W7") == 1,
     R10 = detLookUp(seq, "R10") == 1,
@@ -98,8 +120,7 @@ df.k.this.dets = df.k.l %>%
   ) %>%
   arrange(val) %>%
   bind_rows(otherkcat, .) %>%  # add Becker data
-  mutate(rxnID = fct_inorder(rxnID),
-         rxnID.explicit = fct_inorder(rxnID.explicit))
+  mutate(rxnID = fct_inorder(rxnID))
 spacer = 1.25
 sqs.start = 30
 k1 = df.k.this.dets %>%
@@ -107,7 +128,7 @@ k1 = df.k.this.dets %>%
   geom_errorbarh(aes(xmin = CI.lo, xmax = CI.hi),
                  color = "gray50", linewidth = 0.5, height = 0.5) +
   geom_point(shape = 18, color = "orangered3", size = 2.25) +
-  geom_text(aes(label = formatexplicitID(rxnID.explicit),
+  geom_text(aes(label = formatexplicitID(rxnID),
                 x = if_else(val > 0.85,
                             0.015,
                             15),
@@ -179,7 +200,7 @@ suffixregex = "[\\._#]([a-zA-Z0-9\\|\\(\\)~]+)$"
 df.kcomp.perturb = df.k.this %>%
   mutate(
     ID.base    = sub(suffixregex, "", rxnID),
-    ID.perturb = str_match(rxnID.explicit, suffixregex)[,2]
+    ID.perturb = str_match(rxnID, suffixregex)[,2]
   ) %>%
   mutate(perturb.group = case_when(
 
@@ -461,12 +482,12 @@ df.mmVdets = df.mmVdets.perturb %>%
   )) %>%
   mutate(ID.base = if_else(ID.base == "miR-7.24mer", "miR-7.X24mer", ID.base)) %>%
   arrange(perturb.supergroup, ID.basefam, ID.base, bp.pattern) %>%
-  mutate(rxnID.explicit = gsub("\\.|_", "    ", as.character(rxnID.explicit))) %>%
-  mutate(rxnID.explicit = fct_inorder(as.character(rxnID.explicit)))
+  mutate(rxnID = gsub("\\.|_", "    ", as.character(rxnID))) %>%
+  mutate(rxnID = fct_inorder(as.character(rxnID)))
 
 
 k3 = df.mmVdets %>%
-  ggplot(aes(x = val, y = rxnID.explicit)) +
+  ggplot(aes(x = val, y = rxnID)) +
   facet_col("plot.group",
             space = "free",
             scales = "free_y",
@@ -505,7 +526,7 @@ k3
 # Bar plots for fold changes in the mm vs dets analysis for 6/7
 df.mmVdets.bars.base = df.mmVdets %>%
   filter(perturb.supergroup == "mm6/7") %>%
-  select(rxnID, rxnID.explicit,
+  select(rxnID, rxnID,
          ID.basefam, ID.base, ID.wt, bp.pattern,
          det.here,
          FC_vsPerf.dir, FC_vsPerf,
@@ -544,13 +565,13 @@ df.mmVdets.bars = df.mmVdets.bars.base %>%
   mutate(comparison.here = if_else(
     compref == "Perf",
     bp.pattern,
-    str_extract(rxnID.explicit, "M[0-9][0-9AUGC\\(\\|]+\\)")
+    str_extract(rxnID, "M[0-9][0-9AUGC\\(\\|]+\\)")
   )) %>%
   mutate(plotgroup = interaction(compref, ID.basefam),
          mmVdet = paste(
            gsub("\\(", " (",
                 gsub("\\|", ", ",
-                str_extract(rxnID.explicit, "M[0-9][0-9AUGC\\(\\|]+\\)")
+                str_extract(rxnID, "M[0-9][0-9AUGC\\(\\|]+\\)")
                 )),
            sub("^\\.p", "P", bp.pattern),
            det.here,
@@ -611,7 +632,7 @@ df.miR7.kon = df.k.l %>%
   ))
 k4 = df.miR7.kon %>%
   ggplot(aes(x = val, y = targ.vers)) +
-  facet_col("guidename",
+  facet_col("rxnID",
             space = "free",
             scales = "free_y",
             strip.position = "left") +
@@ -645,7 +666,7 @@ df.chim.kon = df.k.l %>%
     "lsy-6", "lsy-6/miR-124", "miR-124"
   ))
 k4b = df.chim.kon %>%
-  ggplot(aes(x = val, y = rxnID.explicit)) +
+  ggplot(aes(x = val, y = rxnID)) +
 
   annotate("rect",
            xmin = difflim, xmax = Inf,
@@ -831,7 +852,7 @@ df.S387 = df.k.l %>%
            "kcat",
            "koffP"
          ))) %>%
-  arrange(coeff, guidename, S387)
+  arrange(coeff, rxnID, S387)
 
 k7 = df.S387 %>%
   ggplot(aes(x = val, y = S387)) +
@@ -843,7 +864,7 @@ k7 = df.S387 %>%
   scale_color_manual(
     values = c("gray60", "royalblue", "darkgoldenrod"),
     breaks = c("S", "A", "D")) +
-  facet_grid(guidename~coeff, scales = "free_x") +
+  facet_grid(rxnID~coeff, scales = "free_x") +
   labs(y = "Residue 387",
        x = "Value (nM-1 min-1 or min-1)") +
   theme0

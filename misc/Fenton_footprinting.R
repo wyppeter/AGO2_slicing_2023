@@ -81,18 +81,14 @@ theme0 = theme(
 # Read and process data ----
 ## Raw input and initial processing
 df.raw = read.csv("fenton_values_upto21.csv") %>%
-  ### Name conversion
-  mutate(
-    miR = if_else(miR == "miR-7-L22", "miR-7-L22_v2", miR),
-    rxnID = idLookUp(miR)) %>%
-
-  filter(!(miR %in% c("miR-124", "miR-124-X2") & sample == "tdmd")) %>%
+  mutate(rxnID = miR) %>%
+  filter(!(miR %in% c("miR-124", "miR-124.M2") & sample == "tdmd")) %>%
   
   ### Data QC filters
   filter(!(miR == "miR-430a" & expe == "2")) %>%  # Outlier set; uniform & elevated signal, confirmed by code below
   filter(!(miR == "miR-430a"   & pos >= 15)) %>%  # Interference from trimmed isoforms
   filter(!(miR == "miR-124"    & pos >= 15)) %>%  # Interference from trimmed isoforms
-  filter(!(miR == "miR-124-X2" & pos >= 15))      # Interference from trimmed isoforms
+  filter(!(miR == "miR-124.M2" & pos >= 15))      # Interference from trimmed isoforms
   
 
 ## Linear-rescaling normalization to the range between quenched and naked guide ----

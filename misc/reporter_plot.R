@@ -53,11 +53,7 @@ df.hek.2 = read.csv(paste0(
          cells = "HEK293T")
 
 df = bind_rows(df.hela.1, df.hela.2,
-               df.hek.1,  df.hek.2
-) %>%
-  mutate(miR = if_else(miR == "miR-7-L22", "miR-7-L22_v2", miR)) %>%
-  left_join(namedict %>% select(miR, rxnID, rxnID.explicit), by = "miR") %>%
-  select(-miR)
+               df.hek.1,  df.hek.2)
 
 # Stat functions
 geomean = function(x){
@@ -77,8 +73,8 @@ df.l = df %>%
   ) %>%
   mutate(miR.par = gsub("\\.X[0-9]$", "", rxnID),
          miR.mut = case_when(
-           rxnID %in% c("hsa-miR-7","hsa-miR-196a.X3") ~ "Fast",
-           rxnID %in% c("hsa-miR-7.X4","hsa-miR-196a") ~ "Slow",
+           rxnID %in% c("miR-7","miR-196a.M3") ~ "Fast",
+           rxnID %in% c("miR-7.M4","miR-196a") ~ "Slow",
            TRUE ~ "NA"
          )
          ) %>%
@@ -89,7 +85,7 @@ df.l = df %>%
          logFR = log10(FR)) %>%
 
   mutate(cells = factor(cells, levels = c("HeLa", "HEK293T")),
-         miR.par = factor(miR.par, levels = c("hsa-miR-7", "hsa-miR-196a")),
+         miR.par = factor(miR.par, levels = c("miR-7", "miR-196a")),
          iron = factor(iron, levels = c("DFO", "FAC")),
          miR.mut = factor(miR.mut, levels = c("Slow","Fast"))) %>%
   arrange(cells, miR.par, iron, miR.mut, expe) %>%
@@ -105,7 +101,7 @@ df.l.mean = df.l %>%
   rename(mean.FR = fn1, sem.FR = fn2) %>%
 
   mutate(cells = factor(cells, levels = c("HeLa", "HEK293T")),
-         miR.par = factor(miR.par, levels = c("hsa-miR-7", "hsa-miR-196a")),
+         miR.par = factor(miR.par, levels = c("miR-7", "miR-196a")),
          iron = factor(iron, levels = c("DFO", "FAC")),
          miR.mut = factor(miR.mut, levels = c("Slow","Fast")))
 

@@ -50,58 +50,38 @@ theme0 = theme(
 
 # READ DATA ----
 # [A] >= [R]*4
-df.raw = read.csv(paste0(
-  "./",
-  "slicing_data_STO.csv"),
-  stringsAsFactors = T
-)
+df.raw = read.csv("./slicing-assay-data_collated-STO.csv", stringsAsFactors = T)
 
 # PROCESS AND COMBINE DATA
+# Note suffixes: miR-000a#XXX_XXX --> #XXX = RISC notes, _XXX = targ notes
 df = df.raw %>%
-
+  # Map back to legacy headings
+  transmute(miR = reaction.symbol,
+            assay = assayID,
+            conc = RISC.conc,
+            Rconc = RNA.conc,
+            time = time..s.,
+            fraccleaved = fracsliced
+  ) %>%
+  
   ## Filter to specific data points
   filter(miR %in% c(
-    "miR-124-X2_16bp",
+    # Slow 16bp rxns
+    "miR-124.M2_16bp",
     "miR-196a_16bp",
-    "miR-196a-X1_16bp",
+    "miR-196a.M1_16bp",
+    # Slow mm17 rxns
     "miR-196a_mm17GA",
-    "miR-196a-X1_mm17AA"
+    "miR-196a.M1_mm17AA"
   )) %>%
-
-  ### Note suffixes:
-  ###
-  ### miR-000a#XXX_XXX --> #XXX = RISC notes, _XXX = targ notes
-  ###
-
-  # Add note to non-PW prep AGO rxns
-  mutate(
-    miR = as.character(miR) %>%
-      if_else(prep == "PW", ., paste0(., "#", prep)) %>%
-      factor()
-  ) %>%
-
-  ## Concentration correction (guide* quant)
-  mutate(miR_c = sub("_.+", "", as.character(miR)),  # get AGO prep name for quant lookup
-         conc_raw = conc,
-         conc = if_else(
-           qtype == "guide",
-           conc * qLookUp(miR_c),
-           conc),  # correct for quant ratio
-         approx.quant = (qtype == "guide" & qLookUp.bool(miR_c)), 
+  mutate(miR = factor(miR)) %>%
 
   ## MISC CLEANUP
-         time = as.integer(round(time*60))) %>%  # rounding to the time resolution of ODE, and convert to seconds
-  filter(conc != 0, time != 0) %>%  # discard control points
   mutate(assay = factor(as.character(assay)), conc_d = factor(conc)) %>%  # factor-ize some variables
   arrange(miR, conc, assay)
 
 # Note down the guide names used here
 guides = as.character(unname(levels(df$miR)))
-
-# Note down quant approximations from guide*
-df.q.note = df %>%
-  select(miR, approx.quant) %>%
-  distinct()
 
 ##############################
 # Get ODE data for Fa ----
@@ -118,7 +98,8 @@ fit.coefs.Fa = fit.coefs %>%
   transmute(miR.given = as.character(miR), Fa.given = Fa)
 
 df.dt = df %>%
-  left_join(., fit.coefs.Fa, by = c("miR_c" = "miR.given")) %>%
+  mutate(miR_parent = sub("_16bp|_mm17[AUGC]{2}", "", as.character(miR))) %>%
+  left_join(., fit.coefs.Fa, by = c("miR_parent" = "miR.given")) %>%
   select(miR, Fa.given, conc, Rconc, time, fraccleaved)  # Simplify df for fitting
 
 Fa.get = function(y) {
@@ -180,33 +161,21 @@ nlsFit.graph = data.frame(
   mutate(fraccleaved = calcFC(kcat, Fa, time)) %>%
   filter(time > 0)
 
-## Guide/rxn names to be printed ----
-namedict.print = namedict %>%
-  select(miR, rxnID, rxnID.explicit) %>%
-  mutate(rxnID.print = sub("\\(", " (",
-                           sub("#", " #",
-                               sub("_", " _",
-                                   gsub("\\|", ", ",
-                                        rxnID.explicit)))))
-
 ##############################
 
 # PLOT ----
 FACETS = as.integer(round(sqrt(n.guides*3/2)))
 plt = df.dt %>%
-  left_join(namedict.print, by = "miR") %>%
   ggplot(aes(x = time/60, y = fraccleaved,
              color = conc)) +
 
-  geom_line(data = nlsFit.graph %>%
-              left_join(namedict.print, by = "miR"),
+  geom_line(data = nlsFit.graph,
             linewidth = 0.5, alpha = 0.75, color = "black") +
   geom_point(size = 0.75, stroke = 1, shape = 1, alpha = 0.75) +
 
   # Fitted parameters print
   # print in min-1
-  geom_text(data = nlsout %>%
-              left_join(namedict.print, by = "miR"),
+  geom_text(data = nlsout,
             inherit.aes = FALSE,
             size = 3,
             y = Inf,
@@ -229,7 +198,7 @@ plt = df.dt %>%
                             sampleN,
                             sep = ""))) +
 
-  facet_wrap("rxnID.print", ncol = FACETS, scales = "free") +
+  facet_wrap("miR", ncol = FACETS, scales = "free") +
   scale_color_viridis(direction = -1, option= "D", discrete = F, na.value = "gray80",
                       end = 0.97, limits = c(0.05, 50),
                       trans = "log10",
@@ -265,10 +234,9 @@ if(SAVE_PLOT){
 if(SAVE_TABLE){
   nlsout.write = nlsout %>%
     ungroup() %>%
-    left_join(namedict.print, by = "miR") %>%
     transmute(
+      rxnID     = miR,
       miR       = miR,
-      rxnID     = rxnID,
 
       kon       = exp(difflim)*60,
       kon.lo    = NA_real_,

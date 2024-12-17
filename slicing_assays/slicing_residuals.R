@@ -43,66 +43,37 @@ theme0 = theme(
 
 # READ DATA ----
 # [A] >= [R]*4
-df.raw = read.csv(paste0(
-  "./",
-  "slicing_data_STO.csv"),
-  stringsAsFactors = T
-)
+df.raw = read.csv("./slicing-assay-data_collated-STO.csv", stringsAsFactors = T)
 
 # PROCESS AND COMBINE DATA ----
+# Note suffixes: miR-000a#XXX_XXX --> #XXX = RISC notes, _XXX = targ notes
 df = df.raw %>%
-  
-  ### Note suffixes:
-  ###
-  ### miR-000a#XXX_XXX --> #XXX = RISC notes, _XXX = targ notes
-  ###
-  
-  # Add note to non-PW prep AGO rxns
-  mutate(
-    miR = as.character(miR) %>%
-      if_else(prep == "PW", ., paste0(., "#", prep)) %>%
-      factor()
+  # Map back to legacy headings
+  transmute(miR = reaction.symbol,
+            assay = assayID,
+            conc = RISC.conc,
+            Rconc = RNA.conc,
+            time = time..s.,
+            fraccleaved = fracsliced
   ) %>%
   
   ## Remove special data points
   filter(!miR %in% c(
     # Slow 16bp rxns
-    "miR-124-X2_16bp",
+    "miR-124.M2_16bp",
     "miR-196a_16bp",
-    "miR-196a-X1_16bp",
-    
+    "miR-196a.M1_16bp",
     # Slow mm17 rxns
     "miR-196a_mm17GA",
-    "miR-196a-X1_mm17AA",
-    
-    # Single-conc rxns that cannot be used
-    "miR-122#TP",
-    "miR-124#TP",
-    "miR-7#TP"
+    "miR-196a.M1_mm17AA"
   )) %>%
   
-  ## Concentration correction (guide* quant)
-  mutate(miR_c = sub("_.+", "", as.character(miR)),  # get AGO prep name for quant lookup
-         conc_raw = conc,
-         conc = if_else(
-           qtype == "guide",
-           conc * qLookUp(miR_c),
-           conc),  # correct for quant ratio
-         approx.quant = (qtype == "guide" & qLookUp.bool(miR_c)), 
-         
-         ## MISC CLEANUP
-         time = as.integer(round(time*60))) %>%  # rounding to the time resolution of ODE, and convert to seconds
-  filter(conc != 0, time != 0) %>%  # discard control points
+  ## MISC CLEANUP
   mutate(assay = factor(as.character(assay)), conc_d = factor(conc)) %>%  # factor-ize some variables
   arrange(miR, conc, assay)
 
 # Note down the guide names used here
 guides = as.character(unname(levels(df$miR)))
-
-# Note down quant approximations from guide*
-df.q.note = df %>%
-  select(miR, approx.quant) %>%
-  distinct()
 
 # Simplify df
 df.dt = df %>%
