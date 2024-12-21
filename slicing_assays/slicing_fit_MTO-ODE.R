@@ -1,4 +1,4 @@
-# Slicing assay fitting and graphing; multiple-turnover to fit koffP
+# Slicing assay fitting and graphing; multiple-turnover (MTO) to fit koffP
 # Fitting using ODEs:
 # - log-transformed fit and CI calculation
 # - no koff considerations
@@ -6,7 +6,6 @@
 # - universal adaptive architecture to consider different ODE models
 # - includes a separate Fmax for MTO, as inactive RNA
 # Requires helper file ODElib-MTO.R
-# Requires helper file lookUp-helpers.R
 # Bartel Lab
 # Peter Y. Wang 2023
 

@@ -4,7 +4,6 @@
 # - no koff and koffP considerations
 # - no kon considerations; assumes kslice << kon
 # - no second phase kinetics; assumes known Fa
-# Requires helper file lookup-helpers.R
 # Bartel Lab
 # Peter Y. Wang 2023
 

@@ -5,7 +5,6 @@
 # - first fits with all 4 constants, then falls back to fast-kon, then falls back to no-second-phase
 # - universal adaptive architecture to consider different ODE models
 # Requires helper file ODElib.R
-# Requires helper file lookup-helpers.R
 # Bartel Lab
 # Peter Y. Wang 2023
 

@@ -1,6 +1,5 @@
 # Plot residuals of fits to data
 # Requires helper file ODElib.R
-# Requires helper file lookup-helpers.R
 # Bartel Lab
 # Peter Y. Wang 2023
 

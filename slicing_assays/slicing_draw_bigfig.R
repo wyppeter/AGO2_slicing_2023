@@ -1,6 +1,5 @@
 # Redraw slicing kinetics plots from saved fit results
 # Requires helper file ODElib.R
-# Requires helper file lookup-helpers.R
 # Bartel Lab
 # Peter Y. Wang 2023
 
